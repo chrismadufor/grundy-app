@@ -1,36 +1,185 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Grundy Stores - E-Commerce MVP
+
+A modern e-commerce application built with Next.js, Firebase, and Paystack integration.
+
+## Features
+
+- 🛍️ **Product Browsing**: View all products from Firestore
+- 📦 **Shopping Cart**: Add items, adjust quantities, and remove items
+- 💳 **Payment Integration**: Support for Pay Now (Paystack) and Pay on Delivery
+- 📱 **Responsive Design**: Modern UI with TailwindCSS
+- 🔒 **Order Management**: Track orders with unique redemption codes
+
+## Tech Stack
+
+- **Framework**: Next.js 16 (App Router)
+- **Styling**: TailwindCSS 4
+- **Database**: Firebase Firestore
+- **Storage**: Firebase Storage
+- **Payments**: Paystack
+- **State Management**: React Context API + localStorage
 
 ## Getting Started
 
-First, run the development server:
+### Prerequisites
 
+- Node.js 18+ and npm
+- Firebase project
+- Paystack account
+
+### Installation
+
+1. Install dependencies:
 ```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+npm install firebase
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+2. Set up environment variables:
+Create a `.env.local` file in the root directory with the following variables:
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+```env
+# Firebase Configuration
+NEXT_PUBLIC_FIREBASE_API_KEY=your_firebase_api_key
+NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN=your_project.firebaseapp.com
+NEXT_PUBLIC_FIREBASE_PROJECT_ID=your_project_id
+NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET=your_project.appspot.com
+NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID=your_sender_id
+NEXT_PUBLIC_FIREBASE_APP_ID=your_app_id
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+# Paystack Configuration
+PAYSTACK_SECRET_KEY=your_paystack_secret_key
+NEXT_PUBLIC_PAYSTACK_PUBLIC_KEY=your_paystack_public_key
+PAYSTACK_WEBHOOK_SECRET=your_webhook_secret
 
-## Learn More
+# App Configuration
+NEXT_PUBLIC_APP_URL=http://localhost:3000
+```
 
-To learn more about Next.js, take a look at the following resources:
+3. Run the development server:
+```bash
+npm run dev
+```
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+Open [http://localhost:3000](http://localhost:3000) in your browser.
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+## Firebase Setup
 
-## Deploy on Vercel
+### Firestore Collections
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+#### Products Collection
+```typescript
+{
+  id: string;
+  name: string;
+  price: number;
+  description: string;
+  imageUrl: string;
+  storeName?: string;
+  createdAt: Timestamp;
+}
+```
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+#### Orders Collection
+```typescript
+{
+  id: string;
+  items: Array<{
+    productId: string;
+    qty: number;
+    price: number;
+  }>;
+  name: string;
+  email: string;
+  address?: string;
+  paymentMethod: "pay_now" | "pay_on_delivery";
+  paymentStatus: "pending" | "paid";
+  totalAmount: number;
+  paystackRef?: string;
+  offlineReference?: string;
+  redemptionCode: string;
+  createdAt: Timestamp;
+}
+```
+
+### Firestore Security Rules (Development)
+
+```javascript
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    match /products/{document=**} {
+      allow read: if true;
+      allow write: if false; // Only allow writes from admin panel
+    }
+    match /orders/{document=**} {
+      allow read: if false; // Only server-side reads
+      allow write: if false; // Only server-side writes
+    }
+  }
+}
+```
+
+## Paystack Webhook Setup
+
+1. Go to your Paystack Dashboard
+2. Navigate to Settings > Webhooks
+3. Add webhook URL: `https://yourdomain.com/api/paystack/webhook`
+4. Copy the webhook secret and add it to your `.env.local` file
+
+## Project Structure
+
+```
+app/
+  ├── api/
+  │   └── paystack/
+  │       ├── create-transaction/route.ts
+  │       ├── create-invoice/route.ts
+  │       └── webhook/route.ts
+  ├── product/[id]/page.tsx
+  ├── cart/page.tsx
+  ├── checkout/page.tsx
+  ├── payment-success/page.tsx
+  └── page.tsx (home)
+components/
+  ├── ProductCard.tsx
+  ├── ProductDetail.tsx
+  ├── CartItem.tsx
+  ├── CheckoutForm.tsx
+  ├── PaymentMethodSelector.tsx
+  ├── PaystackButton.tsx
+  ├── Navbar.tsx
+  └── LoadingSpinner.tsx
+context/
+  └── CartContext.tsx
+lib/
+  ├── firebase/
+  │   ├── config.ts
+  │   ├── firestore.ts
+  │   ├── products.ts
+  │   └── orders.ts
+  ├── paystack/
+  │   ├── verifyWebhook.ts
+  └── paystack.ts
+types/
+  └── index.ts
+```
+
+## Payment Flow
+
+### Pay Now
+1. User selects "Pay Now" on checkout
+2. System creates Paystack transaction
+3. Paystack popup opens for payment
+4. On success, webhook updates order status to "paid"
+5. User sees success page with redemption code
+
+### Pay on Delivery
+1. User selects "Pay on Delivery" and enters address
+2. System creates Paystack invoice
+3. Order saved with `paymentMethod: "pay_on_delivery"`
+4. User receives offline reference code
+5. User pays on delivery using redemption code
+
+## License
+
+MIT
