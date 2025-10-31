@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { verifyPaystackWebhook, PaystackWebhookEvent } from "@/lib/paystack/verifyWebhook";
 import { updateOrderPaymentStatus } from "@/lib/firebase/orders";
 import { firestoreHelpers } from "@/lib/firebase/firestore";
+import { Order } from "@/types";
 
 export async function POST(request: NextRequest) {
   try {
@@ -31,7 +32,7 @@ export async function POST(request: NextRequest) {
       const reference = event.data.reference;
       
       // Find order by Paystack reference
-      const orders = await firestoreHelpers.queryDocuments(
+      const orders = await firestoreHelpers.queryDocuments<Order>(
         "orders",
         "paystackRef",
         "==",
