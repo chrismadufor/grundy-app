@@ -79,7 +79,7 @@ export async function createTransaction(
 }
 
 export async function createInvoice(
-  data: CreateInvoiceRequest
+  data: CreateInvoiceRequest & { customerCode?: string }
 ): Promise<CreateInvoiceResponse> {
   if (!PAYSTACK_SECRET_KEY) {
     throw new Error("PAYSTACK_SECRET_KEY is not configured");
@@ -92,7 +92,8 @@ export async function createInvoice(
       "Content-Type": "application/json",
     },
     body: JSON.stringify({
-      customer: data.email,
+      // Paystack now expects a customer code for payment requests; fallback to email for older behavior
+      customer: data.customerCode || data.email,
       amount: data.amount,
       currency: "NGN",
       due_date: data.due_date || new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(),
@@ -108,10 +109,111 @@ export async function createInvoice(
   return response.json();
 }
 
+export interface VerifyTransactionResponse {
+  status: boolean;
+  message: string;
+  data?: {
+    status: string; // success | failed | abandoned
+    reference: string;
+    amount: number;
+    paid_at?: string;
+    [key: string]: any;
+  };
+}
+
+export async function verifyTransaction(reference: string): Promise<VerifyTransactionResponse> {
+  if (!PAYSTACK_SECRET_KEY) {
+    throw new Error("PAYSTACK_SECRET_KEY is not configured");
+  }
+
+  const response = await fetch(`${PAYSTACK_API_URL}/transaction/verify/${encodeURIComponent(reference)}`, {
+    method: "GET",
+    headers: {
+      Authorization: `Bearer ${PAYSTACK_SECRET_KEY}`,
+      "Content-Type": "application/json",
+    },
+    cache: "no-store",
+  });
+
+  if (!response.ok) {
+    const error = await response.json().catch(() => ({}));
+    throw new Error(error.message || "Failed to verify transaction");
+  }
+
+  return response.json();
+}
+
+// Helpers for customers
+interface PaystackCustomer {
+  customer_code: string;
+  email: string;
+  [key: string]: any;
+}
+
+export async function createCustomer(email: string, name?: string): Promise<PaystackCustomer> {
+  if (!PAYSTACK_SECRET_KEY) {
+    throw new Error("PAYSTACK_SECRET_KEY is not configured");
+  }
+  const body: Record<string, any> = { email };
+  if (name) body.first_name = name;
+
+  const res = await fetch(`${PAYSTACK_API_URL}/customer`, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${PAYSTACK_SECRET_KEY}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(body),
+  });
+
+  const json = await res.json().catch(() => ({}));
+  if (!res.ok) {
+    throw new Error(json?.message || "Failed to create customer");
+  }
+  return json?.data as PaystackCustomer;
+}
+
+export async function findCustomerByEmail(email: string): Promise<PaystackCustomer | null> {
+  if (!PAYSTACK_SECRET_KEY) {
+    throw new Error("PAYSTACK_SECRET_KEY is not configured");
+  }
+  // Paystack supports filtering by email via query param on List Customers
+  const res = await fetch(`${PAYSTACK_API_URL}/customer?email=${encodeURIComponent(email)}`, {
+    method: "GET",
+    headers: {
+      Authorization: `Bearer ${PAYSTACK_SECRET_KEY}`,
+      "Content-Type": "application/json",
+    },
+    cache: "no-store",
+  });
+  const json = await res.json().catch(() => ({}));
+  if (!res.ok) {
+    return null;
+  }
+  // Some responses return an array in data, others may return a single; normalize
+  const data = json?.data;
+  if (Array.isArray(data)) {
+    return (data.find((c: any) => c.email?.toLowerCase() === email.toLowerCase()) || null) as PaystackCustomer | null;
+  }
+  if (data && data.email?.toLowerCase() === email.toLowerCase()) {
+    return data as PaystackCustomer;
+  }
+  return null;
+}
+
+export async function createOrGetCustomerCode(email: string, name?: string): Promise<string> {
+  // Try find existing
+  const existing = await findCustomerByEmail(email).catch(() => null);
+  if (existing?.customer_code) return existing.customer_code;
+  // Create new customer
+  const created = await createCustomer(email, name);
+  return created.customer_code;
+}
+
 export function getPublicKey(): string {
   if (!PAYSTACK_PUBLIC_KEY) {
     throw new Error("NEXT_PUBLIC_PAYSTACK_PUBLIC_KEY is not configured");
-  }
+    }
   return PAYSTACK_PUBLIC_KEY;
 }
 

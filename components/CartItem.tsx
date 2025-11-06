@@ -33,7 +33,7 @@ export default function CartItem({ item }: CartItemProps) {
             </h3>
           </Link>
           <p className="text-lg font-bold text-foreground mt-1">
-            ₦{item.price.toLocaleString()}
+            ₦{(item.price / 100).toLocaleString()}
           </p>
         </div>
         <div className="flex items-center justify-between mt-4">
@@ -54,7 +54,7 @@ export default function CartItem({ item }: CartItemProps) {
           </div>
           <div className="text-right">
             <p className="text-lg font-bold text-foreground">
-              ₦{(item.price * item.quantity).toLocaleString()}
+              ₦{((item.price * item.quantity) / 100).toLocaleString()}
             </p>
             <button
               onClick={() => removeFromCart(item.productId)}

@@ -2,10 +2,12 @@ import { getAllProducts } from "@/lib/firebase/products";
 import ProductCard from "@/components/ProductCard";
 import LoadingSpinner from "@/components/LoadingSpinner";
 import Navbar from "@/components/Navbar";
+import SeedButton from "@/components/SeedButton";
+import { Product } from "@/types";
 
 export default async function Home() {
-  let products = [];
-  let error = null;
+  let products: Product[] = [];
+  let error: string | null = null;
 
   try {
     products = await getAllProducts();
@@ -26,10 +28,13 @@ export default async function Home() {
             </p>
           </div>
         ) : products.length === 0 ? (
-          <div className="text-center py-12">
+          <div className="text-center py-12 space-y-6">
             <p className="text-gray-600 dark:text-gray-400">
-              No products available. Add products to Firestore to see them here.
+              No products available. Click the button below to seed sample products.
             </p>
+            <div className="flex justify-center">
+              <SeedButton />
+            </div>
           </div>
         ) : (
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">

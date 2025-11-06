@@ -46,7 +46,7 @@ export default function ProductDetail({ product }: ProductDetailProps) {
             {product.name}
           </h1>
           <p className="text-3xl font-bold text-foreground mb-6">
-            ₦{product.price.toLocaleString()}
+            ₦{(product.price / 100).toLocaleString()}
           </p>
           <div className="mb-6">
             <h2 className="text-lg font-semibold text-foreground mb-2">

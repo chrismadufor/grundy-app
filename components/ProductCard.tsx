@@ -46,7 +46,7 @@ export default function ProductCard({ product }: ProductCardProps) {
           </h3>
           <div className="flex items-center justify-between">
             <p className="text-xl font-bold text-foreground">
-              ₦{product.price.toLocaleString()}
+              ₦{(product.price / 100).toLocaleString()}
             </p>
             <button
               onClick={handleAddToCart}

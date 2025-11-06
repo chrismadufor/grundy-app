@@ -30,7 +30,9 @@ export interface Order {
   paymentStatus: "pending" | "paid";
   totalAmount: number;
   paystackRef?: string;
-  offlineReference?: string;
+  offlineReference?: string; // Legacy field, kept for backward compatibility
+  deliveryPosCode?: string; // For POS delivery payment (offline_reference from payment request)
+  deliveryTransferCode?: string; // For transfer delivery payment (access_code from transaction)
   redemptionCode: string;
   createdAt: Date;
 }

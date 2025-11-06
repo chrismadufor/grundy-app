@@ -10,7 +10,7 @@ type PaymentMethod = "pay_now" | "pay_on_delivery" | null;
 
 export default function CheckoutForm() {
   const router = useRouter();
-  const { cartItems, getTotalPrice, clearCart } = useCart();
+  const { cartItems, getTotalPrice } = useCart();
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [address, setAddress] = useState("");
@@ -22,6 +22,7 @@ export default function CheckoutForm() {
     reference: string;
     orderId: string;
   } | null>(null);
+  const [showDeliverySummary, setShowDeliverySummary] = useState(false);
 
   const totalAmount = getTotalPrice();
 
@@ -29,18 +30,13 @@ export default function CheckoutForm() {
     e.preventDefault();
     setError(null);
 
-    if (!name || !email) {
+    if (!name || !email || !address) {
       setError("Please fill in all required fields");
       return;
     }
 
     if (!paymentMethod) {
       setError("Please select a payment method");
-      return;
-    }
-
-    if (paymentMethod === "pay_on_delivery" && !address) {
-      setError("Please enter your delivery address");
       return;
     }
 
@@ -60,6 +56,7 @@ export default function CheckoutForm() {
             })),
             name,
             email,
+            address,
             totalAmount,
           }),
         });
@@ -76,33 +73,10 @@ export default function CheckoutForm() {
           orderId: data.orderId,
         });
       } else {
-        // Create Pay on Delivery invoice
-        const response = await fetch("/api/paystack/create-invoice", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            items: cartItems.map((item) => ({
-              productId: item.productId,
-              qty: item.quantity,
-              price: item.price,
-            })),
-            name,
-            email,
-            address,
-            totalAmount,
-          }),
-        });
-
-        if (!response.ok) {
-          const errorData = await response.json();
-          throw new Error(errorData.error || "Failed to create invoice");
-        }
-
-        const data = await response.json();
-        clearCart();
-        router.push(
-          `/payment-success?orderId=${data.orderId}&method=pay_on_delivery`
-        );
+        // Show summary page for pay on delivery
+        setShowDeliverySummary(true);
+        setIsSubmitting(false);
+        return;
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : "Something went wrong");
@@ -111,14 +85,44 @@ export default function CheckoutForm() {
     }
   };
 
-  const handlePaystackSuccess = async (reference: string) => {
+  const handlePaystackSuccess = async (_reference: string) => {
+    // Redirect is handled in PaystackButton; cart clears on success page
+  };
+
+  const handleConfirmDeliveryOrder = async () => {
+    setIsSubmitting(true);
+    setError(null);
+
     try {
-      // Wait a moment for webhook to process
-      await new Promise((resolve) => setTimeout(resolve, 2000));
-      clearCart();
-      router.push(`/payment-success?orderId=${paystackData?.orderId}&method=pay_now`);
+      // Create Pay on Delivery invoice
+      const response = await fetch("/api/paystack/create-invoice", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          items: cartItems.map((item) => ({
+            productId: item.productId,
+            qty: item.quantity,
+            price: item.price,
+          })),
+          name,
+          email,
+          address,
+          totalAmount,
+        }),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || "Failed to create invoice");
+      }
+
+      const data = await response.json();
+      router.push(
+        `/payment-success?orderId=${data.orderId}&method=pay_on_delivery`
+      );
     } catch (err) {
-      setError("Payment successful but failed to redirect. Order reference: " + reference);
+      setError(err instanceof Error ? err.message : "Something went wrong");
+      setIsSubmitting(false);
     }
   };
 
@@ -133,23 +137,92 @@ export default function CheckoutForm() {
                 <span>
                   {item.name} x{item.quantity}
                 </span>
-                <span>₦{(item.price * item.quantity).toLocaleString()}</span>
+                <span>₦{((item.price * item.quantity) / 100).toLocaleString()}</span>
               </div>
             ))}
           </div>
           <div className="border-t pt-4 flex justify-between text-xl font-bold text-foreground">
             <span>Total:</span>
-            <span>₦{totalAmount.toLocaleString()}</span>
+            <span>₦{(totalAmount / 100).toLocaleString()}</span>
           </div>
         </div>
         <PaystackButton
           accessCode={paystackData.accessCode}
+          orderId={paystackData.orderId}
           email={email}
           amount={totalAmount}
           reference={paystackData.reference}
           onSuccess={handlePaystackSuccess}
           onClose={() => setPaystackData(null)}
         />
+      </div>
+    );
+  }
+
+  if (showDeliverySummary && paymentMethod === "pay_on_delivery") {
+    return (
+      <div className="space-y-6">
+        <div className="bg-white dark:bg-zinc-900 rounded-lg shadow-md p-6">
+          <h2 className="text-xl font-semibold text-foreground mb-4">Review Your Order</h2>
+          
+          <div className="mb-6 space-y-2">
+            <h3 className="font-semibold text-foreground">Customer Information</h3>
+            <div className="text-sm text-gray-700 dark:text-gray-300 space-y-1">
+              <p><span className="font-medium">Name:</span> {name}</p>
+              <p><span className="font-medium">Email:</span> {email}</p>
+              <p><span className="font-medium">Delivery Address:</span> {address}</p>
+            </div>
+          </div>
+
+          <div className="border-t pt-4 mb-4">
+            <h3 className="font-semibold text-foreground mb-2">Order Items</h3>
+            <div className="space-y-2">
+              {cartItems.map((item) => (
+                <div key={item.productId} className="flex justify-between text-foreground">
+                  <span>
+                    {item.name} x{item.quantity}
+                  </span>
+                  <span>₦{((item.price * item.quantity) / 100).toLocaleString()}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          <div className="border-t pt-4 flex justify-between text-xl font-bold text-foreground">
+            <span>Total:</span>
+            <span>₦{(totalAmount / 100).toLocaleString()}</span>
+          </div>
+        </div>
+
+        {error && (
+          <div className="bg-red-100 dark:bg-red-900/30 border border-red-400 text-red-700 dark:text-red-400 px-4 py-3 rounded">
+            {error}
+          </div>
+        )}
+
+        <div className="flex gap-4">
+          <button
+            onClick={() => setShowDeliverySummary(false)}
+            disabled={isSubmitting}
+            className="flex-1 py-3 bg-gray-200 dark:bg-gray-700 text-foreground rounded-md hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed transition-opacity font-semibold"
+          >
+            Back
+          </button>
+          <button
+            onClick={handleConfirmDeliveryOrder}
+            disabled={isSubmitting}
+            className="flex-1 py-3 bg-foreground text-background rounded-md hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed transition-opacity font-semibold text-lg"
+          >
+            {isSubmitting ? (
+              <span className="flex items-center justify-center gap-2">
+                <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-background"></div>
+                Processing...
+              </span>
+            ) : (
+              "Confirm Order"
+            )}
+          </button>
+        </div>
       </div>
     );
   }
@@ -190,22 +263,20 @@ export default function CheckoutForm() {
         <PaymentMethodSelector value={paymentMethod} onChange={setPaymentMethod} />
       </div>
 
-      {paymentMethod === "pay_on_delivery" && (
-        <div className="bg-white dark:bg-zinc-900 rounded-lg shadow-md p-6">
-          <label htmlFor="address" className="block text-sm font-medium text-foreground mb-2">
-            Delivery Address *
-          </label>
-          <textarea
-            id="address"
-            value={address}
-            onChange={(e) => setAddress(e.target.value)}
-            required
-            rows={4}
-            className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-zinc-800 text-foreground focus:ring-2 focus:ring-foreground focus:border-transparent"
-            placeholder="Enter your full delivery address"
-          />
-        </div>
-      )}
+      <div className="bg-white dark:bg-zinc-900 rounded-lg shadow-md p-6">
+        <label htmlFor="address" className="block text-sm font-medium text-foreground mb-2">
+          Delivery Address *
+        </label>
+        <textarea
+          id="address"
+          value={address}
+          onChange={(e) => setAddress(e.target.value)}
+          required
+          rows={4}
+          className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-zinc-800 text-foreground focus:ring-2 focus:ring-foreground focus:border-transparent"
+          placeholder="Enter your full delivery address"
+        />
+      </div>
 
       <div className="bg-white dark:bg-zinc-900 rounded-lg shadow-md p-6">
         <h2 className="text-xl font-semibold text-foreground mb-4">Order Summary</h2>
@@ -215,13 +286,13 @@ export default function CheckoutForm() {
               <span>
                 {item.name} x{item.quantity}
               </span>
-              <span>₦{(item.price * item.quantity).toLocaleString()}</span>
+              <span>₦{((item.price * item.quantity) / 100).toLocaleString()}</span>
             </div>
           ))}
         </div>
         <div className="border-t pt-4 flex justify-between text-xl font-bold text-foreground">
           <span>Total:</span>
-          <span>₦{totalAmount.toLocaleString()}</span>
+          <span>₦{(totalAmount / 100).toLocaleString()}</span>
         </div>
       </div>
 
@@ -250,4 +321,3 @@ export default function CheckoutForm() {
     </form>
   );
 }
-

@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { createInvoice } from "@/lib/paystack";
+import { createInvoice, createTransaction, createOrGetCustomerCode } from "@/lib/paystack";
 import { createOrder } from "@/lib/firebase/orders";
 import { generateUniqueRedemptionCode } from "@/lib/utils/redemptionCode";
 import { firestoreHelpers } from "@/lib/firebase/firestore";
@@ -34,10 +34,14 @@ export async function POST(request: NextRequest) {
       return orders.length > 0;
     });
 
-    // Create Paystack invoice
-    const invoiceResponse = await createInvoice({
+    // Ensure Paystack customer exists and get customer code
+    const customerCode = await createOrGetCustomerCode(email, name);
+
+    // Create Paystack invoice / payment request (used for records; not exposing offline reference)
+    await createInvoice({
       email,
-      amount: Math.round(totalAmount * 100), // Convert to kobo
+      amount: Math.round(totalAmount), // already in kobo
+      customerCode,
       metadata: {
         orderName: name,
         address,
@@ -45,14 +49,30 @@ export async function POST(request: NextRequest) {
       },
     });
 
-    if (!invoiceResponse.status || !invoiceResponse.data) {
-      throw new Error("Failed to create Paystack invoice");
+    // Also create a Paystack transaction to get access_code for transfer delivery payment
+    let deliveryTransferCode: string | undefined;
+    try {
+      const transaction = await createTransaction({
+        email,
+        amount: Math.round(totalAmount), // already in kobo
+        reference: `ORDER_POD_${Date.now()}`,
+        metadata: {
+          orderName: name,
+          address,
+          redemptionCode,
+          paymentMethod: "pay_on_delivery",
+        },
+      });
+
+      if (transaction.status && transaction.data) {
+        deliveryTransferCode = transaction.data.access_code;
+      }
+    } catch (error) {
+      console.error("Failed to create transaction for pay_on_delivery:", error);
+      // Continue even if transaction creation fails - order still created
     }
 
-    const invoice = invoiceResponse.data.invoice;
-    const offlineReference = invoice.offline_reference;
-
-    // Create order in Firestore
+    // Create order in Firestore without offline reference
     const orderId = await createOrder({
       items,
       name,
@@ -61,15 +81,13 @@ export async function POST(request: NextRequest) {
       paymentMethod: "pay_on_delivery",
       paymentStatus: "pending",
       totalAmount,
-      offlineReference,
+      deliveryTransferCode,
       redemptionCode,
     });
 
     return NextResponse.json({
       orderId,
       redemptionCode,
-      offlineReference,
-      invoiceNumber: invoice.invoice_number,
     });
   } catch (error) {
     console.error("Error creating invoice:", error);

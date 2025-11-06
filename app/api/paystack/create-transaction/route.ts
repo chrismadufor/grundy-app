@@ -7,7 +7,7 @@ import { firestoreHelpers } from "@/lib/firebase/firestore";
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { items, name, email, totalAmount } = body;
+    const { items, name, email, address, totalAmount } = body;
 
     if (!items || !Array.isArray(items) || items.length === 0) {
       return NextResponse.json(
@@ -16,9 +16,9 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    if (!name || !email || !totalAmount) {
+    if (!name || !email || !address || !totalAmount) {
       return NextResponse.json(
-        { error: "Name, email, and totalAmount are required" },
+        { error: "Name, email, address, and totalAmount are required" },
         { status: 400 }
       );
     }
@@ -39,6 +39,7 @@ export async function POST(request: NextRequest) {
       items,
       name,
       email,
+      address,
       paymentMethod: "pay_now",
       paymentStatus: "pending",
       totalAmount,
@@ -48,12 +49,13 @@ export async function POST(request: NextRequest) {
     // Create Paystack transaction
     const transaction = await createTransaction({
       email,
-      amount: Math.round(totalAmount * 100), // Convert to kobo
+      amount: Math.round(totalAmount), // already in kobo
       reference: `ORDER_${orderId}_${Date.now()}`,
       metadata: {
         orderId,
         redemptionCode,
         name,
+        address,
       },
     });
 
@@ -61,9 +63,10 @@ export async function POST(request: NextRequest) {
       throw new Error("Failed to create Paystack transaction");
     }
 
-    // Update order with Paystack reference
+    // Update order with Paystack reference and delivery transfer code
     await firestoreHelpers.updateDocument("orders", orderId, {
       paystackRef: transaction.data.reference,
+      deliveryTransferCode: transaction.data.access_code,
     });
 
     return NextResponse.json({

@@ -5,23 +5,13 @@ import { getPublicKey } from "@/lib/paystack";
 
 declare global {
   interface Window {
-    PaystackPop: {
-      setup: (options: {
-        key: string;
-        email: string;
-        amount: number;
-        ref: string;
-        onClose: () => void;
-        callback: (response: { reference: string }) => void;
-      }) => {
-        openIframe: () => void;
-      };
-    };
+    PaystackPop: any;
   }
 }
 
 interface PaystackButtonProps {
   accessCode: string;
+  orderId: string;
   email: string;
   amount: number;
   reference: string;
@@ -32,6 +22,7 @@ interface PaystackButtonProps {
 
 export default function PaystackButton({
   accessCode,
+  orderId,
   email,
   amount,
   reference,
@@ -51,36 +42,35 @@ export default function PaystackButton({
     }
   }, []);
 
-  const handlePayment = () => {
-    if (!window.PaystackPop) {
-      alert("Paystack is loading, please wait...");
-      return;
+  const handlePayment = async () => {
+    try {
+      const { default: PaystackPop } = await import("@paystack/inline-js");
+      const popup = new PaystackPop();
+      popup.resumeTransaction(
+        accessCode,
+        {
+          onSuccess: (response: { reference: string }) => {
+            // We intentionally redirect here; success page will clear the cart
+            window.location.href = `/payment-success?orderId=${orderId}&method=pay_now&reference=${response.reference}`;
+            onSuccess(response.reference);
+          },
+          onCancel: () => {
+            onClose();
+          },
+        }
+      );
+    } catch (e) {
+      alert("Unable to load Paystack. Please try again.");
     }
-
-    const handler = window.PaystackPop.setup({
-      key: getPublicKey(),
-      email,
-      amount: amount * 100, // Convert to kobo
-      ref: reference,
-      onClose: () => {
-        onClose();
-      },
-      callback: (response) => {
-        onSuccess(response.reference);
-      },
-    });
-
-    handler.openIframe();
   };
 
   return (
     <button
       onClick={handlePayment}
-      disabled={disabled || !window.PaystackPop}
+      disabled={disabled}
       className="w-full py-3 bg-green-600 text-white rounded-md hover:bg-green-700 disabled:bg-gray-400 disabled:cursor-not-allowed transition-colors font-semibold text-lg"
     >
-      {window.PaystackPop ? "Pay Now" : "Loading..."}
+      Pay Now
     </button>
   );
 }
-

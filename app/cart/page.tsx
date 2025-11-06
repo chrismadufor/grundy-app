@@ -62,7 +62,7 @@ export default function CartPage() {
               Total ({getTotalItems()} {getTotalItems() === 1 ? "item" : "items"}):
             </span>
             <span className="text-2xl font-bold text-foreground">
-              ₦{getTotalPrice().toLocaleString()}
+              ₦{(getTotalPrice() / 100).toLocaleString()}
             </span>
           </div>
           <Link
