@@ -9,6 +9,7 @@ interface OrderConfirmationProps {
 
 export default function OrderConfirmation({ order }: OrderConfirmationProps) {
   const isPayOnDelivery = order.paymentMethod === "pay_on_delivery";
+  const posCode = order.offlineReference || order.deliveryPosCode;
 
   return (
     <div className="max-w-2xl mx-auto space-y-6">
@@ -55,15 +56,15 @@ export default function OrderConfirmation({ order }: OrderConfirmationProps) {
           </div>
         )}
 
-        {isPayOnDelivery && (order.deliveryPosCode || order.deliveryTransferCode) && (
+        {isPayOnDelivery && (posCode || order.deliveryTransferCode) && (
           <div className="space-y-4">
             <h2 className="font-semibold text-foreground text-lg">Delivery Payment Codes</h2>
             <div className="space-y-3">
-              {order.deliveryPosCode && (
+              {posCode && (
                 <div className="text-center py-4 bg-blue-50 dark:bg-blue-900/20 rounded-lg border border-blue-200 dark:border-blue-800">
                   <p className="text-sm text-gray-600 dark:text-gray-400 mb-2">For POS delivery payment</p>
                   <p className="text-2xl font-bold text-foreground font-mono tracking-wider">
-                    {order.deliveryPosCode}
+                    {posCode}
                   </p>
                 </div>
               )}

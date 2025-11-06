@@ -37,8 +37,8 @@ export async function POST(request: NextRequest) {
     // Ensure Paystack customer exists and get customer code
     const customerCode = await createOrGetCustomerCode(email, name);
 
-    // Create Paystack invoice / payment request (used for records; not exposing offline reference)
-    await createInvoice({
+    // Create Paystack invoice / payment request and capture offline reference
+    const invoiceResponse = await createInvoice({
       email,
       amount: Math.round(totalAmount), // already in kobo
       customerCode,
@@ -48,6 +48,13 @@ export async function POST(request: NextRequest) {
         redemptionCode,
       },
     });
+
+    if (!invoiceResponse.status || !invoiceResponse.data) {
+      throw new Error("Failed to create Paystack invoice");
+    }
+
+    const pr: any = (invoiceResponse as any).data?.invoice || (invoiceResponse as any).data;
+    const offlineReference = pr?.offline_reference || pr?.offlineReference || undefined;
 
     // Also create a Paystack transaction to get access_code for transfer delivery payment
     let deliveryTransferCode: string | undefined;
@@ -72,7 +79,7 @@ export async function POST(request: NextRequest) {
       // Continue even if transaction creation fails - order still created
     }
 
-    // Create order in Firestore without offline reference
+    // Create order in Firestore with offline reference and transfer code
     const orderId = await createOrder({
       items,
       name,
@@ -81,6 +88,8 @@ export async function POST(request: NextRequest) {
       paymentMethod: "pay_on_delivery",
       paymentStatus: "pending",
       totalAmount,
+      offlineReference,
+      deliveryPosCode: offlineReference,
       deliveryTransferCode,
       redemptionCode,
     });
