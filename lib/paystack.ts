@@ -7,6 +7,7 @@ export interface CreateTransactionRequest {
   amount: number; // in kobo (smallest currency unit)
   reference?: string;
   metadata?: Record<string, any>;
+  channels?: string[]; // Payment channels (e.g., ["bank_transfer"])
 }
 
 export interface CreateTransactionResponse {
@@ -61,13 +62,21 @@ export async function createTransaction(
     throw new Error("PAYSTACK_SECRET_KEY is not configured");
   }
 
+  const requestBody: Record<string, unknown> = {
+    email: data.email,
+    amount: data.amount,
+    ...(data.reference && { reference: data.reference }),
+    ...(data.metadata && { metadata: data.metadata }),
+    ...(data.channels && { channels: data.channels }),
+  };
+
   const response = await fetch(`${PAYSTACK_API_URL}/transaction/initialize`, {
     method: "POST",
     headers: {
       Authorization: `Bearer ${PAYSTACK_SECRET_KEY}`,
       "Content-Type": "application/json",
     },
-    body: JSON.stringify(data),
+    body: JSON.stringify(requestBody),
   });
 
   if (!response.ok) {

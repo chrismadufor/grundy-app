@@ -28,6 +28,8 @@ export interface Order {
   address?: string;
   paymentMethod: "pay_now" | "pay_on_delivery";
   paymentStatus: "pending" | "paid";
+  deliveryStatus: "pending" | "delivered";
+  deliveredAt?: Date;
   totalAmount: number;
   paystackRef?: string;
   offlineReference?: string; // Legacy field, kept for backward compatibility

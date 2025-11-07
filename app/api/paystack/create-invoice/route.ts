@@ -57,12 +57,14 @@ export async function POST(request: NextRequest) {
     const offlineReference = pr?.offline_reference || pr?.offlineReference || undefined;
 
     // Also create a Paystack transaction to get access_code for transfer delivery payment
+    // Restrict to bank transfer only for pay on delivery
     let deliveryTransferCode: string | undefined;
     try {
       const transaction = await createTransaction({
         email,
         amount: Math.round(totalAmount), // already in kobo
         reference: `ORDER_POD_${Date.now()}`,
+        channels: ["bank_transfer"],
         metadata: {
           orderName: name,
           address,
